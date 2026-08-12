@@ -1,52 +1,50 @@
 import { 
     fazerLogin, fazerLogout, iniciarOuvinteFirestore, 
-    salvarNovoPedido, excluirSolicitacaoBanco, atualizarRetornoPcp,
+    salvarNovoPedido, excluirSolicitacaoBanco, 
     emailAutenticado, solicitacoes 
 } from "./firebase.js";
-import { listaVendedores } from "./vendedores.js"; // Importa a lista do arquivo separado
+import { listaVendedores } from "./vendedores.js"; 
+import { renderizarIndicadoresPcp } from "./pcp.js"; // Importa funções específicas do PCP
 
-// Variáveis Locais da Interface
 let usuarioAtual = "";
 let itensDoPedidoAtual = [];
-let solicitacoesSelecionadasIds = [];
+export let solicitacoesSelecionadasIds = []; // Exportado para uso no pcp.js
 let filtroMesAtual = "";
 let filtroVendedorAtual = ""; 
 let filtroStatusAtual = "TODOS";
 let limiteRegistros = 100;
 
-/* POPULAR SELECT DE VENDEDORES (FORMULÁRIO E FILTRO) */
+// Método exportado para modificar a seleção a partir do PCP
+export function setSolicitacoesSelecionadasIds(ids) {
+    solicitacoesSelecionadasIds.length = 0;
+    if (ids && ids.length) solicitacoesSelecionadasIds.push(...ids);
+}
+
 function carregarSelectVendedores() {
     const select = document.getElementById("vendedorNome");
-    if (!select) return;
-
-    select.innerHTML = '<option value="">Selecione o Vendedor...</option>';
+    const selectMonitor = document.getElementById("monitorVendedorNome");
+    
+    if (select) select.innerHTML = '<option value="">Selecione o Vendedor...</option>';
+    if (selectMonitor) selectMonitor.innerHTML = '<option value="">Selecione o Vendedor...</option>';
 
     listaVendedores.sort().forEach(nome => {
-        const option = document.createElement("option");
-        option.value = nome;
-        option.textContent = nome;
-        select.appendChild(option);
+        if (select) {
+            const option = document.createElement("option");
+            option.value = nome;
+            option.textContent = nome;
+            select.appendChild(option);
+        }
+        if (selectMonitor) {
+            const optionMonitor = document.createElement("option");
+            optionMonitor.value = nome;
+            optionMonitor.textContent = nome;
+            selectMonitor.appendChild(optionMonitor);
+        }
     });
 }
 
-function carregarSelectFiltroVendedores() {
-    const select = document.getElementById("filtroVendedor");
-    if (!select) return;
-
-    select.innerHTML = '<option value="">Todos os Vendedores</option>';
-
-    listaVendedores.sort().forEach(nome => {
-        const option = document.createElement("option");
-        option.value = nome;
-        option.textContent = nome;
-        select.appendChild(option);
-    });
-}
-
-// Inicialização segura dos selects (funciona mesmo se o DOM já carregou)
 function inicializarSelects() {
     carregarSelectVendedores();
-    carregarSelectFiltroVendedores();
 }
 
 if (document.readyState === "loading") {
@@ -55,7 +53,6 @@ if (document.readyState === "loading") {
     inicializarSelects();
 }
 
-/* CONTROLE DE SESSÃO */
 window.configurarSessaoUsuario = function(email) {
     if (email === "programacaomto@vendedor.com" || email.includes("vendedor")) {
         usuarioAtual = "Vendedor/Comercial";
@@ -71,8 +68,6 @@ window.configurarSessaoUsuario = function(email) {
     document.getElementById("app").style.display = "flex";
     document.getElementById("usuarioLogado").innerText = usuarioAtual;
 
-    carregarSelectFiltroVendedores(); 
-
     if (email === "programacaomto@vendedor.com" || email.includes("vendedor")) {
         document.getElementById("formSolicitante").classList.remove("hidden");
         configuringDataSolicitacaoAutomatica();
@@ -83,7 +78,6 @@ window.configurarSessaoUsuario = function(email) {
     iniciarOuvinteFirestore(limiteRegistros, renderTabela);
 };
 
-/* LOGIN & LOGOUT */
 async function login() {
     const email = document.getElementById("usuario").value.trim().toLowerCase();
     const senha = document.getElementById("senha").value;
@@ -111,10 +105,9 @@ function abrirPagina(id, btn) {
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
     document.getElementById(id).classList.add("active");
     document.querySelectorAll(".menu button").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
+    if(btn) btn.classList.add("active");
 }
 
-/* CÁLCULOS E DATAS */
 function aplicarBloqueioDatasRetroativas() {
     const hoje = new Date();
     const dataMinima = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
@@ -141,22 +134,17 @@ function calcularPrevisaoItem() {
 
 function calcularPrevisaoEspecifica(tipoMaterial, quantidade) {
     if (!quantidade || quantidade <= 0) return "-";
-    
     const dataCalculo = new Date();
     const tipoNormalizado = String(tipoMaterial).trim().toUpperCase();
-    
     const diasAdicionais = (tipoNormalizado === "MTO") ? 30 : 25;
-    
     dataCalculo.setDate(dataCalculo.getDate() + diasAdicionais);
-    
     const dia = String(dataCalculo.getDate()).padStart(2, '0');
     const mes = String(dataCalculo.getMonth() + 1).padStart(2, '0');
     const ano = dataCalculo.getFullYear();
-    
     return `${dia}/${mes}/${ano}`;
 }
 
-/* IMPORTAÇÃO EXCEL DE ITENS */
+// === FUNÇÃO CORRIGIDA ===
 function importarItensDoExcel(event) {
     const arquivo = event.target.files[0];
     const cli = document.getElementById("cliente").value.trim();
@@ -172,15 +160,31 @@ function importarItensDoExcel(event) {
     const leitor = new FileReader();
     leitor.onload = function(e) {
         try {
-            const linhas = XLSX.utils.sheet_to_json(XLSX.read(e.target.result, { type: 'binary' }).Sheets[XLSX.read(e.target.result, { type: 'binary' }).SheetNames[0]]);
+            const workbook = XLSX.read(e.target.result, { type: 'binary' });
+            const linhas = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
             let contador = 0;
 
             linhas.forEach(linha => {
-                const cod = String(linha["Item"] || linha["Código"] || linha["item"] || "").trim();
-                const qtd = Number(linha["Quantidade"] || linha["Qtd"] || linha["qtd"] || 0);
-                const tipoImp = String(linha["Tipo"] || linha["TipoMaterial"] || "MTO").trim();
+                // Normaliza os cabeçalhos (remove acentos, espaços e deixa tudo minúsculo)
+                const linhaNormalizada = {};
+                for (let chave in linha) {
+                    const chaveLimpa = chave.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                    linhaNormalizada[chaveLimpa] = linha[chave];
+                }
 
-                if (cod && qtd > 0) {
+                // Busca o código pelas variações mais comuns
+                const codRaw = linhaNormalizada["codigo"] || linhaNormalizada["cod"] || linhaNormalizada["item"] || linhaNormalizada["produto"] || "";
+                const cod = String(codRaw).trim();
+                
+                // Busca a quantidade pelas variações mais comuns
+                const qtdRaw = linhaNormalizada["quantidade"] || linhaNormalizada["qtd"] || linhaNormalizada["quant"] || 0;
+                const qtd = Number(qtdRaw);
+                
+                // Busca o tipo do material
+                const tipoRaw = linhaNormalizada["tipo"] || linhaNormalizada["tipomaterial"] || "MTO";
+                const tipoImp = String(tipoRaw).trim();
+
+                if (cod && cod !== "undefined" && qtd > 0) {
                     itensDoPedidoAtual.push({
                         codItem: cod,
                         tipoMaterial: tipoImp,
@@ -193,17 +197,25 @@ function importarItensDoExcel(event) {
                     contador++;
                 }
             });
-
+            
             renderListaItensProvisorios();
-            alert(`Sucesso! ${contador} itens importados.`);
+            
+            if (contador > 0) {
+                alert(`Sucesso! ${contador} itens importados.`);
+            } else {
+                alert("Atenção: O arquivo foi lido, mas nenhum item válido foi encontrado. Verifique se as colunas de 'Código' e 'Quantidade' estão preenchidas corretamente na planilha.");
+            }
+            
         } catch (erro) {
-            alert("Erro ao ler o arquivo Excel.");
+            console.error(erro);
+            alert("Erro ao ler o arquivo Excel. Verifique o formato.");
         } finally {
             event.target.value = "";
         }
     };
     leitor.readAsBinaryString(arquivo);
 }
+// =========================
 
 function adicionarItemNaLista() {
     const cod = document.getElementById("itemCod").value.trim();
@@ -247,7 +259,6 @@ function renderListaItensProvisorios() {
         tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #94a3b8; font-style: italic; padding: 14px;">Nenhum item adicionado.</td></tr>`;
         return;
     }
-
     tbody.innerHTML = "";
     itensDoPedidoAtual.forEach((item, index) => {
         tbody.innerHTML += `
@@ -259,7 +270,6 @@ function renderListaItensProvisorios() {
     });
 }
 
-/* ENVIAR PEDIDO */
 async function enviarSolicitacaoMultiiens() {
     const vendedor = document.getElementById("vendedorNome").value.trim();
     const mercadoValor = document.getElementById("mercadoSolicitante").value;
@@ -310,8 +320,80 @@ async function enviarSolicitacaoMultiiens() {
     }
 }
 
-/* TABELA E FILTROS */
-function renderTabela() {
+function mudarAbaVendedor(aba) {
+    const tabNova = document.getElementById("abaNovaSolicitacao");
+    const tabMonitor = document.getElementById("abaMonitorarSolicitacoes");
+    const btns = document.querySelectorAll(".tabs-vendedor .tab-btn");
+    
+    if (!tabNova || !tabMonitor) return;
+
+    btns.forEach(b => b.classList.remove("active"));
+
+    if (aba === 'nova') {
+        tabNova.classList.remove("hidden");
+        tabMonitor.classList.add("hidden");
+        btns[0].classList.add("active");
+    } else {
+        tabNova.classList.add("hidden");
+        tabMonitor.classList.remove("hidden");
+        btns[1].classList.add("active");
+        renderMonitoramentoVendedor();
+    }
+}
+
+function renderMonitoramentoVendedor() {
+    const vendedor = document.getElementById("monitorVendedorNome").value;
+    const tbody = document.getElementById("listaMonitoramento");
+    
+    if (!tbody) return;
+
+    if (!vendedor) {
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #94a3b8; font-style: italic; padding: 14px;">Selecione um vendedor para monitorar.</td></tr>`;
+        return;
+    }
+
+    const filtradas = solicitacoes.filter(item => item.vendedor === vendedor);
+
+    if (filtradas.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #94a3b8; font-style: italic; padding: 14px;">Nenhuma solicitação encontrada para este vendedor.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = "";
+    filtradas.forEach(item => {
+        let cssStatus = item.status ? item.status.toLowerCase().replace(/\s+/g, '-') : 'pendente';
+        
+        let ultimaAtualizacao = "-";
+        if (item.logAuditoria) {
+             const match = item.logAuditoria.match(/em (\d{2}\/\d{2}\/\d{4} às \d{2}:\d{2}:\d{2})/);
+             ultimaAtualizacao = match ? match[1].replace(' às ', ' ') : item.logAuditoria.substring(0, 30) + "...";
+        } else if (item.dataAtendimento && item.dataAtendimento !== "-") {
+             ultimaAtualizacao = item.dataAtendimento;
+        }
+
+        tbody.innerHTML += `
+            <tr>
+                <td>${item.numeroPedido || "-"}</td>
+                <td>${item.dataSolicitacao || "-"}</td>
+                <td>${item.cliente || "-"}</td>
+                <td><strong>${item.codItem || "-"}</strong> <small>(${item.tipoMaterial || "MTO"})</small></td>
+                <td>${item.quantidade || 0}</td>
+                <td><span class="status-badge status-${cssStatus}">${item.status || 'PENDENTE'}</span></td>
+                <td>${item.responsavelPcp || "-"}</td>
+                <td style="color:#1d4ed8; font-weight:700;">${item.dataPrevista || "-"}</td>
+                <td>${ultimaAtualizacao}</td>
+                <td>
+                    <div style="max-width: 250px; white-space: normal; word-wrap: break-word;">
+                        ${item.observacao ? `<b>Obs:</b> ${item.observacao}<br>` : ""}
+                        ${item.resposta ? `<b style="color:#0284c7;">Retorno:</b> ${item.resposta}` : ""}
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+export function renderTabela() {
     const tabela = document.getElementById("tabelaSolicitacoes");
     const busca = document.getElementById("inputBusca").value.toLowerCase().trim();
     tabela.innerHTML = "";
@@ -339,11 +421,11 @@ function renderTabela() {
     filtradas.forEach(item => {
         let isChecked = solicitacoesSelecionadasIds.includes(item.docId) ? 'checked' : '';
         let tdCheckbox = emailAutenticado === "atendimento@pcp.com"
-            ? `<td class="col-checkbox"><input type="checkbox" value="${item.docId}" ${isChecked} class="chk-solicitacao-item chk-solicitacao" onclick="gerenciarSelecaoItem(this)"></td>`
+            ? `<td class="col-checkbox"><input type="checkbox" value="${item.docId}" ${isChecked} class="chk-solicitacao-item chk-solicitacao" onclick="window.gerenciarSelecaoItem(this)"></td>`
             : `<td class="col-checkbox id-pcp-view hidden"></td>`;
 
         let botoesAcao = emailAutenticado === "atendimento@pcp.com"
-            ? `<button class="action-btn" onclick="abrirModal('${item.docId}')">RESPONDER</button><button class="delete-btn" onclick="deletarSolicitacao('${item.docId}')"><i class="fa-solid fa-trash"></i></button>`
+            ? `<button class="action-btn" onclick="window.abrirModal('${item.docId}')">RESPONDER</button><button class="delete-btn" onclick="window.deletarSolicitacao('${item.docId}')"><i class="fa-solid fa-trash"></i></button>`
             : '-';
             
         let cssStatus = item.status ? item.status.toLowerCase().replace(/\s+/g, '-') : 'pendente';
@@ -379,6 +461,17 @@ function renderTabela() {
     });
 
     atualizarKPIs(baseDados);
+
+    const tabMonitor = document.getElementById("abaMonitorarSolicitacoes");
+    if (tabMonitor && !tabMonitor.classList.contains("hidden")) {
+        renderMonitoramentoVendedor();
+    }
+    
+    // Atualiza indicadores caso a página PCP Indicadores esteja ativa
+    const pageIndicadores = document.getElementById("indicadoresPcpPage");
+    if (pageIndicadores && pageIndicadores.classList.contains("active")) {
+        renderizarIndicadoresPcp();
+    }
 }
 
 function atualizarKPIs(dados) {
@@ -394,7 +487,7 @@ function carregarMaisRegistros() {
     iniciarOuvinteFirestore(limiteRegistros, renderTabela);
 }
 
-async function deletarSolicitacao(docId) {
+window.deletarSolicitacao = async function(docId) {
     if (!confirm("Deseja apagar esta solicitação?")) return;
     try {
         await excluirSolicitacaoBanco(docId);
@@ -404,138 +497,7 @@ async function deletarSolicitacao(docId) {
     }
 }
 
-/* MODAL E RESPOSTAS */
-function abrirModal(docId) {
-    solicitacoesSelecionadasIds = [docId];
-    const item = solicitacoes.find(x => x.docId === docId);
-
-    document.getElementById("modalTituloGeral").innerText = "Responder Solicitação";
-    document.getElementById("responsavelPcp").value = item.responsavelPcp !== "-" ? item.responsavelPcp : "";
-    document.getElementById("areaPcp").value = item.areaPcp !== "-" && item.areaPcp ? item.areaPcp : "Escolha";
-    document.getElementById("respostaTexto").value = item.resposta || "";
-    document.getElementById("dataProducao").value = item.dataProducao !== "-" ? item.dataProducao : "";
-    document.getElementById("dataRetornoPcp").value = item.dataRetornoPcp !== "-" ? item.dataRetornoPcp : "";
-    document.getElementById("novoStatus").value = item.status || "PENDENTE";
-    document.getElementById("modalResposta").style.display = "flex";
-}
-
-function abrirModalMassa() {
-    const marcados = document.querySelectorAll(".chk-solicitacao-item:checked");
-    if (marcados.length > 0) solicitacoesSelecionadasIds = Array.from(marcados).map(c => c.value);
-    if (solicitacoesSelecionadasIds.length === 0) return alert("Selecione pelo menos uma linha.");
-
-    document.getElementById("modalTituloGeral").innerText = `Responder ${solicitacoesSelecionadasIds.length} Itens Selecionados`;
-    document.getElementById("responsavelPcp").value = "";
-    document.getElementById("respostaTexto").value = "";
-    document.getElementById("modalResposta").style.display = "flex";
-}
-
-function fecharModal() {
-    document.getElementById("modalResposta").style.display = "none";
-}
-
-async function salvarResposta() {
-    const marcados = document.querySelectorAll(".chk-solicitacao-item:checked");
-    if (marcados.length > 0) solicitacoesSelecionadasIds = Array.from(marcados).map(c => c.value);
-    if (solicitacoesSelecionadasIds.length === 0) return alert("Nenhum item selecionado.");
-
-    const respPcp = document.getElementById("responsavelPcp").value.trim();
-    if (!respPcp) return alert("Insira o nome do Responsável pelo PCP.");
-
-    const btn = document.getElementById("btnSalvarResposta");
-    btn.disabled = true;
-    btn.innerText = "SALVANDO...";
-
-    const agora = new Date();
-    const dados = {
-        responsavelPcp: respPcp,
-        areaPcp: document.getElementById("areaPcp").value,
-        resposta: document.getElementById("respostaTexto").value,
-        dataProducao: document.getElementById("dataProducao").value || "-",
-        dataRetornoPcp: document.getElementById("dataRetornoPcp").value || "-",
-        status: document.getElementById("novoStatus").value,
-        dataAtendimento: agora.toLocaleDateString("pt-BR"),
-        logAuditoria: `Modificado por ${emailAutenticado} em ${agora.toLocaleDateString("pt-BR")} às ${agora.toLocaleTimeString("pt-BR")}`
-    };
-
-    try {
-        await atualizarRetornoPcp(solicitacoesSelecionadasIds, dados);
-        fecharModal();
-        alert(`Sucesso! ${solicitacoesSelecionadasIds.length} retornos atualizados.`);
-        solicitacoesSelecionadasIds = [];
-    } catch (e) {
-        alert("Erro ao salvar retorno.");
-    } finally {
-        btn.disabled = false;
-        btn.innerText = "ENVIAR RETORNO";
-    }
-}
-
-/* EXPORTAÇÃO EXCEL */
-function exportarExcel() {
-    const dados = solicitacoes.map(({ docId, ...resto }) => resto);
-    const ws = XLSX.utils.json_to_sheet(dados);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "MTO");
-    XLSX.writeFile(wb, "Programacao_MTO.xlsx");
-}
-
-/* EXPORTAÇÃO PDF */
-export function exportarPDF() {
-    console.log("Iniciando geração do PDF...");
-
-    if (window.jspdf && window.jspdf.jsPDF) {
-        window.jsPDF = window.jspdf.jsPDF;
-    }
-
-    if (!window.jsPDF) {
-        return alert("A biblioteca jsPDF não foi carregada. Verifique sua conexão com a internet.");
-    }
-
-    try {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('l', 'mm', 'a4');
-
-        if (typeof doc.autoTable !== 'function') {
-            return alert("O plugin de tabela PDF (jspdf-autotable) não foi carregado corretamente.");
-        }
-
-        doc.setFontSize(14);
-        doc.text("Programação MTO - Relatório de Solicitações", 14, 15);
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 14, 22);
-
-        doc.autoTable({
-            html: '#tabelaMtoHTML',
-            startY: 28,
-            theme: 'grid',
-            headStyles: {
-                fillColor: [15, 23, 42],
-                textColor: [255, 255, 255],
-                fontSize: 8,
-                fontStyle: 'bold'
-            },
-            bodyStyles: {
-                fontSize: 7,
-                textColor: [51, 65, 85]
-            },
-            alternateRowStyles: {
-                fillColor: [248, 250, 252]
-            },
-            margin: { top: 28, right: 10, bottom: 10, left: 10 }
-        });
-
-        doc.save(`Programacao_MTO_${new Date().toISOString().slice(0, 10)}.pdf`);
-        console.log("PDF baixado com sucesso!");
-
-    } catch (error) {
-        console.error("Erro detalhado na geração do PDF:", error);
-        alert("Ocorreu um erro ao gerar o PDF. Pressione F12 e veja o Console para mais detalhes.");
-    }
-}
-
-/* VINCULAÇÃO GLOBAL DOS BOTÕES */
+/* VINCULAÇÃO GLOBAL DOS BOTÕES DO ESCOPO GERAL */
 window.login = login;
 window.logout = logout;
 window.abrirPagina = abrirPagina;
@@ -546,40 +508,29 @@ window.removerItemDaLista = removerItemDaLista;
 window.enviarSolicitacaoMultiiens = enviarSolicitacaoMultiiens;
 window.renderTabela = renderTabela;
 window.carregarMaisRegistros = carregarMaisRegistros;
-window.deletarSolicitacao = deletarSolicitacao;
-window.abrirModal = abrirModal;
-window.abrirModalMassa = abrirModalMassa;
-window.fecharModal = fecharModal;
-window.salvarResposta = salvarResposta;
-window.exportarExcel = exportarExcel;
-window.exportarPDF = exportarPDF;
 window.filtrarPorStatus = (st) => { filtroStatusAtual = st; renderTabela(); };
 window.filtrarMes = () => { 
     filtroMesAtual = document.getElementById("filtroMes").value; 
     renderTabela(); 
 };
-window.filtrarVendedor = () => { 
-    filtroVendedorAtual = document.getElementById("filtroVendedor").value; 
-    renderTabela(); 
-};
 window.limparFiltro = () => {
     filtroMesAtual = "";
-    filtroVendedorAtual = "";
     document.getElementById("filtroMes").value = ""; 
-    const selectVendedor = document.getElementById("filtroVendedor");
-    if (selectVendedor) selectVendedor.value = ""; 
     renderTabela();
 };
 window.toggleSelecionarTodos = (m) => { 
     document.querySelectorAll(".chk-solicitacao-item").forEach(c => { 
         c.checked = m.checked; 
-        gerenciarSelecaoItem(c); 
+        window.gerenciarSelecaoItem(c); 
     }); 
 };
 window.gerenciarSelecaoItem = (c) => { 
     if (c.checked) { 
         if (!solicitacoesSelecionadasIds.includes(c.value)) solicitacoesSelecionadasIds.push(c.value); 
     } else { 
-        solicitacoesSelecionadasIds = solicitacoesSelecionadasIds.filter(x => x !== c.value); 
+        const index = solicitacoesSelecionadasIds.indexOf(c.value);
+        if (index > -1) solicitacoesSelecionadasIds.splice(index, 1);
     }
 };
+window.mudarAbaVendedor = mudarAbaVendedor;
+window.renderMonitoramentoVendedor = renderMonitoramentoVendedor;
