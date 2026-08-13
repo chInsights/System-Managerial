@@ -493,6 +493,7 @@ export function renderTabela() {
         renderMonitoramentoVendedor();
     }
     
+    // Atualiza indicadores caso a página PCP Indicadores esteja ativa
     const pageIndicadores = document.getElementById("indicadoresPcpPage");
     if (pageIndicadores && pageIndicadores.classList.contains("active")) {
         renderizarIndicadoresPcp();
@@ -552,6 +553,7 @@ window.processarFlegarLista = function() {
     let naoEncontrados = [];
 
     codigosUnicos.forEach(cod => {
+        // Compara com texto exato (considerando possíveis zeros a esquerda mantidos pelo .trim())
         const matches = baseDados.filter(item => String(item.codItem).trim() === cod);
         if (matches.length > 0) {
             encontradosSet.add(cod);
@@ -565,8 +567,10 @@ window.processarFlegarLista = function() {
         }
     });
 
+    // Re-renderiza para atualizar os checkboxes flegados
     renderTabela();
 
+    // Atualiza UI Modal
     document.getElementById('flegarInputArea').classList.add('hidden');
     document.getElementById('flegarResultArea').classList.remove('hidden');
 
