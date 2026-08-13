@@ -143,6 +143,21 @@ function calcularPrevisaoEspecifica(tipoMaterial, quantidade) {
     return `${dia}/${mes}/${ano}`;
 }
 
+function formatarDataParaImportacao(valor) {
+    if (valor == null || valor === "") return null;
+    if (typeof valor === "number") {
+        const date = new Date(Math.round((valor - 25569) * 86400 * 1000));
+        const d = new Date(date.getTime() + date.getTimezoneOffset() * 60000);
+        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    }
+    const dataStr = String(valor).trim();
+    if (dataStr.includes("-") && dataStr.split("-")[0].length === 4) {
+        const p = dataStr.split("-");
+        return `${p[2].substring(0,2)}/${p[1]}/${p[0]}`;
+    }
+    return dataStr; 
+}
+
 function importarItensDoExcel(event) {
     const arquivo = event.target.files[0];
     const cli = document.getElementById("cliente").value.trim();
@@ -154,6 +169,12 @@ function importarItensDoExcel(event) {
         return;
     }
     if (!arquivo) return;
+
+    // Pega as datas configuradas manualmente na tela para usar como fallback
+    const dtCliRawForm = document.getElementById("itemDataCliente").value;
+    const dtDesRawForm = document.getElementById("itemDataDesejavel").value;
+    const dataClienteGeral = dtCliRawForm ? `${dtCliRawForm.split('-')[2]}/${dtCliRawForm.split('-')[1]}/${dtCliRawForm.split('-')[0]}` : "-";
+    const dataDesejavelGeral = dtDesRawForm ? `${dtDesRawForm.split('-')[2]}/${dtDesRawForm.split('-')[1]}/${dtDesRawForm.split('-')[0]}` : "-";
 
     const leitor = new FileReader();
     leitor.onload = function(e) {
@@ -178,14 +199,21 @@ function importarItensDoExcel(event) {
                 const tipoRaw = linhaNormalizada["tipo"] || linhaNormalizada["tipomaterial"] || "MTO";
                 const tipoImp = String(tipoRaw).trim();
 
+                // Busca as datas no excel e aplica a data do formulário como fallback
+                const valExcelCli = linhaNormalizada["datacliente"] || linhaNormalizada["data cliente"] || linhaNormalizada["dtcliente"];
+                const valExcelDes = linhaNormalizada["datadesejavel"] || linhaNormalizada["data desejavel"] || linhaNormalizada["dtdesejavel"];
+                
+                const dtCliFormatada = formatarDataParaImportacao(valExcelCli) || dataClienteGeral;
+                const dtDesFormatada = formatarDataParaImportacao(valExcelDes) || dataDesejavelGeral;
+
                 if (cod && cod !== "undefined" && qtd > 0) {
                     itensDoPedidoAtual.push({
                         codItem: cod,
                         tipoMaterial: tipoImp,
                         quantidade: qtd,
                         dataPrevista: calcularPrevisaoEspecifica(tipoImp, qtd),
-                        dataCliente: "-",
-                        dataDesejavel: "-",
+                        dataCliente: dtCliFormatada,
+                        dataDesejavel: dtDesFormatada,
                         numeroPedido: numPedido
                     });
                     contador++;
@@ -249,7 +277,7 @@ function removerItemDaLista(index) {
 function renderListaItensProvisorios() {
     const tbody = document.getElementById("listaItensProvisorios");
     if (itensDoPedidoAtual.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #94a3b8; font-style: italic; padding: 14px;">Nenhum item adicionado.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #94a3b8; font-style: italic; padding: 14px;">Nenhum item adicionado.</td></tr>`;
         return;
     }
     tbody.innerHTML = "";
@@ -259,6 +287,8 @@ function renderListaItensProvisorios() {
                 <td><strong>${item.codItem}</strong> <small>(${item.tipoMaterial})</small></td>
                 <td><strong>${item.quantidade}</strong></td>
                 <td>${item.numeroPedido}</td>
+                <td>Dt Cli: ${item.dataCliente !== "-" ? item.dataCliente : "N/I"}</td>
+                <td>Dt Des: ${item.dataDesejavel !== "-" ? item.dataDesejavel : "N/I"}</td>
             </tr>`;
     });
 }
@@ -341,7 +371,7 @@ function renderMonitoramentoVendedor() {
     if (!tbody) return;
 
     if (!vendedor) {
-        tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: #94a3b8; font-style: italic; padding: 14px;">Selecione um vendedor para monitorar suas solicitações.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: #94a3b8; font-style: italic; padding: 14px;">Selecione um vendedor para monitorar.</td></tr>`;
         return;
     }
 
@@ -364,7 +394,6 @@ function renderMonitoramentoVendedor() {
              ultimaAtualizacao = item.dataAtendimento;
         }
 
-        // Colunas reordenadas (ID no final)
         tbody.innerHTML += `
             <tr>
                 <td>${item.cliente || "-"}</td>
@@ -425,7 +454,6 @@ export function renderTabela() {
             
         let cssStatus = item.status ? item.status.toLowerCase().replace(/\s+/g, '-') : 'pendente';
 
-        // Colunas Reordenadas (CLIENTE | COD ITEM | Nº PEDIDO | QTD) e ID no final antes da AÇÃO
         tabela.innerHTML += `
         <tr>
             ${tdCheckbox}
@@ -465,7 +493,6 @@ export function renderTabela() {
         renderMonitoramentoVendedor();
     }
     
-    // Atualiza indicadores caso a página PCP Indicadores esteja ativa
     const pageIndicadores = document.getElementById("indicadoresPcpPage");
     if (pageIndicadores && pageIndicadores.classList.contains("active")) {
         renderizarIndicadoresPcp();
@@ -525,7 +552,6 @@ window.processarFlegarLista = function() {
     let naoEncontrados = [];
 
     codigosUnicos.forEach(cod => {
-        // Compara com texto exato (considerando possíveis zeros a esquerda mantidos pelo .trim())
         const matches = baseDados.filter(item => String(item.codItem).trim() === cod);
         if (matches.length > 0) {
             encontradosSet.add(cod);
@@ -539,10 +565,8 @@ window.processarFlegarLista = function() {
         }
     });
 
-    // Re-renderiza para atualizar os checkboxes flegados
     renderTabela();
 
-    // Atualiza UI Modal
     document.getElementById('flegarInputArea').classList.add('hidden');
     document.getElementById('flegarResultArea').classList.remove('hidden');
 
@@ -570,7 +594,28 @@ window.removerItemDaLista = removerItemDaLista;
 window.enviarSolicitacaoMultiiens = enviarSolicitacaoMultiiens;
 window.renderTabela = renderTabela;
 window.carregarMaisRegistros = carregarMaisRegistros;
-window.filtrarPorStatus = (st) => { filtroStatusAtual = st; renderTabela(); };
+
+// Nova função de filtro corrigida
+window.filtrarPorStatus = (st) => { 
+    filtroStatusAtual = st; 
+    
+    // Remove class active-filter de todos os cards
+    const cards = document.querySelectorAll('#solicitacoes .cards .card');
+    cards.forEach(c => c.classList.remove('active-filter'));
+
+    // Adiciona ao card selecionado com base no mapeamento de status
+    let cardId = 'cardTotal';
+    if (st === 'PENDENTE') cardId = 'cardPendente';
+    else if (st === 'AGUARDANDO SUPRIMENTOS') cardId = 'cardAguardandoSup';
+    else if (st === 'AGUARDANDO COMERCIAL') cardId = 'cardAguardandoCom';
+    else if (st === 'PROGRAMADO') cardId = 'cardProgramado';
+
+    const activeCard = document.getElementById(cardId);
+    if (activeCard) activeCard.classList.add('active-filter');
+
+    renderTabela(); 
+};
+
 window.filtrarMes = () => { 
     filtroMesAtual = document.getElementById("filtroMes").value; 
     renderTabela(); 

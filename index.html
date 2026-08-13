@@ -132,7 +132,7 @@
                 <div class="page active" id="solicitacoes">
                     
                     <div class="cards">
-                        <div class="card active-filter" id="cardTotal" onclick="filtrarPorStatus('TODOS')">
+                        <div class="card active-filter" id="cardTotal" onclick="window.filtrarPorStatus('TODOS')">
                             <div class="card-top">
                                 <div>
                                     <div class="card-title">Total Geral</div>
@@ -142,7 +142,7 @@
                             </div>
                         </div>
 
-                        <div class="card" id="cardPendente" onclick="filtrarPorStatus('PENDENTE')">
+                        <div class="card" id="cardPendente" onclick="window.filtrarPorStatus('PENDENTE')">
                             <div class="card-top">
                                 <div>
                                     <div class="card-title">Pendentes</div>
@@ -152,7 +152,7 @@
                             </div>
                         </div>
 
-                        <div class="card" id="cardAguardandoSup" onclick="filtrarPorStatus('AGUARDANDO SUPRIMENTOS')">
+                        <div class="card" id="cardAguardandoSup" onclick="window.filtrarPorStatus('AGUARDANDO SUPRIMENTOS')">
                             <div class="card-top">
                                 <div>
                                     <div class="card-title">Ag. Suprimentos</div>
@@ -162,7 +162,7 @@
                             </div>
                         </div>
 
-                        <div class="card" id="cardAguardandoCom" onclick="filtrarPorStatus('AGUARDANDO COMERCIAL')">
+                        <div class="card" id="cardAguardandoCom" onclick="window.filtrarPorStatus('AGUARDANDO COMERCIAL')">
                             <div class="card-top">
                                 <div>
                                     <div class="card-title">Ag. Comercial</div>
@@ -172,7 +172,7 @@
                             </div>
                         </div>
 
-                        <div class="card" id="cardProgramado" onclick="filtrarPorStatus('PROGRAMADO')">
+                        <div class="card" id="cardProgramado" onclick="window.filtrarPorStatus('PROGRAMADO')">
                             <div class="card-top">
                                 <div>
                                     <div class="card-title">Programados</div>
@@ -280,14 +280,16 @@
                                     <table class="tabela-itens-provisorios">
                                         <thead>
                                             <tr>
-                                                <th style="width: 40%;">Item (Código)</th>
-                                                <th style="width: 30%;">Quantidade</th>
-                                                <th style="width: 30%;">Pedido</th>
+                                                <th style="width: 25%;">Item (Código)</th>
+                                                <th style="width: 15%;">Quantidade</th>
+                                                <th style="width: 20%;">Pedido</th>
+                                                <th style="width: 20%;">Data Cliente</th>
+                                                <th style="width: 20%;">Data Desejável</th>
                                             </tr>
                                         </thead>
                                         <tbody id="listaItensProvisorios">
                                             <tr>
-                                                <td colspan="3" style="text-align: center; color: #94a3b8; font-style: italic; padding: 14px;">
+                                                <td colspan="5" style="text-align: center; color: #94a3b8; font-style: italic; padding: 14px;">
                                                     Nenhum item adicionado (Dê duplo clique na linha inserida para remover).
                                                 </td>
                                             </tr>
@@ -357,7 +359,7 @@
                         <button class="send-btn" style="margin-top:0;" onclick="filtrarMes()">FILTRAR</button>
                         <button class="logout" style="width:auto; margin-top:0; background:#64748b;" onclick="limparFiltro()">LIMPAR FILTROS</button>
                         
-                        <!-- NOVO BOTÃO: FLEGAR POR LISTA -->
+                        <!-- BOTÃO: FLEGAR POR LISTA -->
                         <button class="send-btn" style="margin-top:0; background:#3b82f6;" onclick="abrirModalFlegarLista()">
                             <i class="fa-solid fa-list-check"></i> Flegar por Lista
                         </button>
@@ -366,7 +368,7 @@
                             <i class="fa-solid fa-layer-group"></i> Responder Selecionados
                         </button>
                         
-                        <!-- NOVO BOTÃO: EXPORTAR PENDENTES PCP -->
+                        <!-- BOTÃO: EXPORTAR PENDENTES PCP -->
                         <button id="btnExportarPendentes" class="btn-massa hidden id-pcp-view" style="background:#f59e0b;" onclick="exportarPendentesPcp()">
                             <i class="fa-solid fa-file-export"></i> Exportar Pendentes
                         </button>
@@ -470,7 +472,7 @@
                                 <canvas id="chartAtendimentoPcp"></canvas>
                             </div>
                             
-                            <!-- GRÁFICO: TOP 10 VENDEDORES (Com Filtro Múltiplo Incorporado) -->
+                            <!-- GRÁFICO: TOP 10 VENDEDORES -->
                             <div class="chart-container" style="grid-column: 1 / -1; display: flex; flex-direction: column; min-height: 380px;">
                                 
                                 <div class="header-top10" style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 16px; position: relative; z-index: 20;">
@@ -581,7 +583,7 @@
         </div>
     </div>
     
-    <!-- NOVO MODAL: FLEGAR POR LISTA -->
+    <!-- MODAL: FLEGAR POR LISTA -->
     <div class="modal" id="modalFlegarLista">
         <div class="modal-content" style="max-width: 400px;">
             <div class="modal-header">
